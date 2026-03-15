@@ -124,3 +124,14 @@ The Lambda function performs the following steps:
 ## 📄 License
 
 This project is open source and available under the [MIT License](LICENSE).
+
+## 🙋 Author
+
+**Chathura Dandeniya**  
+AWS Solutions Architect Associate | CKA | Terraform Associate | AZ-104  
+📍 Melbourne, VIC, Australia  
+🔗 [LinkedIn](https://www.linkedin.com/in/chathura-dandeniya-7913b022b/) | [GitHub](https://github.com/chathura-dandeniya)
+
+---
+
+> ⭐ If you found this project useful, consider giving it a star!
