@@ -108,7 +108,7 @@ The Lambda function performs the following steps:
 | Voice | Joanna (English, US) |
 | Output Format | MP3 |
 | S3 Bucket | poly-audio-file-storage-2026 |
-| Runtime | Node.js 20.x |
+| Runtime | Node.js 22.x |
 | Architecture | x86_64 |
 
 ---
