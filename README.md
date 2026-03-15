@@ -6,6 +6,8 @@ A serverless AWS project that converts text into natural-sounding speech using *
 
 ## 📐 Architecture Overview
 
+[![View Architecture Animation](https://img.shields.io/badge/View-Architecture%20Animation-blue)](https://chathura-dandeniya.github.io/aws-polly-tts-lambda/aws-tts-pipeline.html)
+
 ```
 User Input (Text)
       │
