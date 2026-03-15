@@ -121,6 +121,9 @@ The Lambda function performs the following steps:
 
 ---
 
+## 📖 Step-by-Step Guide
+[View the full setup guide →](GUIDE.md)
+
 ## 📄 License
 
 This project is open source and available under the [MIT License](LICENSE).
