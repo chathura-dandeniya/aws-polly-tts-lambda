@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AWS Text-to-Speech Pipeline</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary:    #ffffff;
+      --bg-secondary:  #f4f6f8;
+      --bg-card:       #ffffff;
+      --border:        #dde1e7;
+      --border-light:  #eaecf0;
+      --text-primary:  #0d1117;
+      --text-secondary:#6b7280;
+      --aws-dark:      #232F3E;
+      --aws-orange:    #FF9900;
+      --lambda-color:  #FF9900;
+      --polly-color:   #01A88D;
+      --s3-color:      #3F8624;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-primary:    #0d1117;
+        --bg-secondary:  #161b22;
+        --bg-card:       #21262d;
+        --border:        #30363d;
+        --border-light:  #21262d;
+        --text-primary:  #e6edf3;
+        --text-secondary:#8b949e;
+      }
+    }
+
+    body {
+      background: var(--bg-primary);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      max-width: 860px;
+      width: 100%;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+    }
+
+    /* ── Title bar ── */
+    .title-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+    .aws-badge {
+      background: var(--aws-dark);
+      color: var(--aws-orange);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 5px;
+      letter-spacing: 0.5px;
+    }
+    .title-text {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .status-wrap { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--polly-color);
+      box-shadow: 0 0 6px var(--polly-color);
+      animation: glow 1.5s ease-in-out infinite;
+    }
+    .status-label { font-size: 11px; color: var(--text-secondary); }
+
+    /* ── Pipeline row ── */
+    .pipeline {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 8px;
+    }
+
+    .endpoint-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 10px;
+      text-align: center;
+      background: var(--bg-secondary);
+      min-width: 84px;
+      max-width: 92px;
+      flex-shrink: 0;
+      animation: floatY 3.5s ease-in-out infinite;
+    }
+    .endpoint-card .icon { font-size: 24px; margin-bottom: 4px; }
+    .endpoint-card .label { font-size: 11px; font-weight: 600; color: var(--text-primary); line-height: 1.3; }
+    .endpoint-card .sub   { font-size: 10px; color: var(--text-secondary); line-height: 1.3; }
+
+    /* ── Arrow segment ── */
+    .arrow-seg {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      min-width: 48px;
+    }
+    .arrow-tag {
+      font-size: 10px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+    .arrow-track {
+      position: relative;
+      width: 100%;
+      height: 2px;
+      background: var(--border);
+      overflow: visible;
+    }
+    .arrow-track::after {
+      content: '';
+      position: absolute;
+      right: -1px; top: -4px;
+      border: 5px solid transparent;
+      border-left-color: var(--border);
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      position: absolute;
+      top: -3px;
+      pointer-events: none;
+    }
+    .dot-fwd { animation: slideRight 2.2s linear infinite; }
+    .dot-rev { animation: slideLeft  2.8s linear infinite; }
+    .d1 { animation-delay: 0s; }
+    .d2 { animation-delay: 0.73s; }
+    .d3 { animation-delay: 1.46s; }
+    .orange { background: var(--lambda-color); box-shadow: 0 0 6px var(--lambda-color); }
+    .teal   { background: var(--polly-color);  box-shadow: 0 0 6px var(--polly-color); }
+    .green  { background: var(--s3-color);     box-shadow: 0 0 6px var(--s3-color); }
+    .gray   { background: #9ca3af; box-shadow: 0 0 5px #9ca3af; }
+
+    /* ── AWS Cloud dashed box ── */
+    .cloud-box {
+      border: 1.5px dashed var(--border);
+      border-radius: 16px;
+      padding: 16px 10px 20px;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      position: relative;
+    }
+    .cloud-label {
+      position: absolute;
+      top: -10px; left: 16px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: var(--bg-card);
+      padding: 0 6px;
+    }
+
+    /* ── Service node ── */
+    .service-node {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .service-node:hover { transform: translateY(-4px); }
+
+    .icon-wrap {
+      position: relative;
+      width: 60px; height: 60px;
+    }
+    .icon-circle {
+      width: 58px; height: 58px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+      position: relative;
+      z-index: 1;
+    }
+    .icon-circle.lambda { background: var(--lambda-color); animation: floatY 3s ease-in-out infinite 0s; }
+    .icon-circle.polly  { background: var(--polly-color);  animation: floatY 3s ease-in-out infinite 0.4s; }
+    .icon-circle.s3     { background: var(--s3-color);     animation: floatY 3s ease-in-out infinite 0.8s; }
+
+    .icon-ring {
+      position: absolute;
+      inset: -5px;
+      border-radius: 50%;
+      animation: ringGlow 2.2s ease-in-out infinite;
+      z-index: 0;
+    }
+    .ring-orange { background: radial-gradient(circle, rgba(255,153,0,0.35) 0%, transparent 70%); animation-delay: 0s; }
+    .ring-teal   { background: radial-gradient(circle, rgba(1,168,141,0.35) 0%, transparent 70%); animation-delay: 0.4s; }
+    .ring-green  { background: radial-gradient(circle, rgba(63,134,36,0.35) 0%, transparent 70%); animation-delay: 0.8s; }
+
+    .step-badge {
+      position: absolute;
+      top: -4px; right: -4px;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--aws-dark);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 2;
+      border: 2px solid var(--bg-card);
+    }
+    .node-label { font-size: 11px; font-weight: 600; color: var(--text-primary); text-align: center; line-height: 1.3; }
+    .node-sub   { font-size: 10px; color: var(--text-secondary); text-align: center; }
+
+    /* Lambda λ text */
+    .lambda-sym {
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+      font-family: Georgia, serif;
+      line-height: 1;
+    }
+
+    /* ── Return row ── */
+    .return-row {
+      display: flex;
+      align-items: center;
+      margin-top: 10px;
+      gap: 0;
+    }
+    .return-track {
+      flex: 1;
+      position: relative;
+      height: 2px;
+      background: var(--border);
+      margin: 0 2px;
+      overflow: visible;
+    }
+    .return-track::before {
+      content: '';
+      position: absolute;
+      left: -1px; top: -4px;
+      border: 5px solid transparent;
+      border-right-color: var(--border);
+    }
+    .return-label {
+      position: absolute;
+      top: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    /* ── Legend ── */
+    .legend {
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      background: var(--bg-secondary);
+      padding: 16px 18px;
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px 24px;
+    }
+    .legend-item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      animation: stepPulse 3s ease-in-out infinite;
+    }
+    .legend-item:nth-child(1) { animation-delay: 0s; }
+    .legend-item:nth-child(2) { animation-delay: 0.75s; }
+    .legend-item:nth-child(3) { animation-delay: 1.5s; }
+    .legend-item:nth-child(4) { animation-delay: 2.25s; }
+    .legend-num {
+      min-width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--aws-dark);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .legend-text {
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      margin-top: 18px;
+      text-align: center;
+      font-size: 10px;
+      color: var(--text-secondary);
+      opacity: 0.6;
+    }
+
+    /* ── Keyframes ── */
+    @keyframes floatY {
+      0%, 100% { transform: translateY(0px); }
+      50%       { transform: translateY(-5px); }
+    }
+    @keyframes glow {
+      0%, 100% { opacity: 0.5; }
+      50%       { opacity: 1; }
+    }
+    @keyframes ringGlow {
+      0%, 100% { opacity: 0.3; transform: scale(1); }
+      50%       { opacity: 0.7; transform: scale(1.1); }
+    }
+    @keyframes slideRight {
+      0%   { left: -4px;           opacity: 0; }
+      5%   { opacity: 1; }
+      95%  { opacity: 1; }
+      100% { left: calc(100% + 4px); opacity: 0; }
+    }
+    @keyframes slideLeft {
+      0%   { left: calc(100% + 4px); opacity: 0; }
+      5%   { opacity: 1; }
+      95%  { opacity: 1; }
+      100% { left: -4px;             opacity: 0; }
+    }
+    @keyframes stepPulse {
+      0%, 100% { opacity: 0.55; }
+      50%       { opacity: 1; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    @media (max-width: 600px) {
+      .legend { grid-template-columns: 1fr; }
+      .cloud-box { flex-direction: column; gap: 12px; padding: 20px 14px; }
+      .pipeline  { flex-direction: column; gap: 8px; }
+      .arrow-seg { width: 100%; }
+      .return-row { flex-direction: column; gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+
+    <!-- Title -->
+    <div class="title-bar">
+      <span class="aws-badge">AWS</span>
+      <span class="title-text">Text-to-Speech Pipeline</span>
+      <div class="status-wrap">
+        <div class="status-dot"></div>
+        <span class="status-label">Live</span>
+      </div>
+    </div>
+
+    <!-- Pipeline -->
+    <div class="pipeline">
+
+      <!-- Step 1: Input -->
+      <div class="endpoint-card" style="animation-delay:0s;">
+        <div class="icon">📄</div>
+        <div class="label">Article / Book</div>
+        <div class="sub">newsletter etc.</div>
+      </div>
+
+      <!-- Arrow 1 -->
+      <div class="arrow-seg">
+        <div class="arrow-tag">Retrieves text</div>
+        <div class="arrow-track">
+          <div class="dot dot-fwd orange d1"></div>
+          <div class="dot dot-fwd orange d2"></div>
+          <div class="dot dot-fwd orange d3"></div>
+        </div>
+      </div>
+
+      <!-- AWS Cloud -->
+      <div class="cloud-box">
+        <span class="cloud-label">⬛ AWS Cloud</span>
+
+        <!-- Lambda -->
+        <div class="service-node">
+          <div class="icon-wrap">
+            <div class="icon-ring ring-orange"></div>
+            <div class="icon-circle lambda">
+              <span class="lambda-sym">λ</span>
+            </div>
+            <div class="step-badge">2</div>
+          </div>
+          <div class="node-label">Lambda</div>
+          <div class="node-sub">function</div>
+        </div>
+
+        <!-- Arrow 2 -->
+        <div class="arrow-seg">
+          <div class="arrow-tag">Text Synthesis</div>
+          <div class="arrow-track">
+            <div class="dot dot-fwd teal d1" style="animation-delay:0.4s"></div>
+            <div class="dot dot-fwd teal d2" style="animation-delay:1.13s"></div>
+            <div class="dot dot-fwd teal d3" style="animation-delay:1.86s"></div>
+          </div>
+        </div>
+
+        <!-- Amazon Polly -->
+        <div class="service-node">
+          <div class="icon-wrap">
+            <div class="icon-ring ring-teal"></div>
+            <div class="icon-circle polly">🔊</div>
+            <div class="step-badge">3</div>
+          </div>
+          <div class="node-label">Amazon Polly</div>
+          <div class="node-sub">TTS engine</div>
+        </div>
+
+        <!-- Arrow 3 -->
+        <div class="arrow-seg">
+          <div class="arrow-tag">Audio stored</div>
+          <div class="arrow-track">
+            <div class="dot dot-fwd green d1" style="animation-delay:0.8s"></div>
+            <div class="dot dot-fwd green d2" style="animation-delay:1.53s"></div>
+            <div class="dot dot-fwd green d3" style="animation-delay:2.26s"></div>
+          </div>
+        </div>
+
+        <!-- S3 -->
+        <div class="service-node">
+          <div class="icon-wrap">
+            <div class="icon-ring ring-green"></div>
+            <div class="icon-circle s3">🪣</div>
+            <div class="step-badge">4</div>
+          </div>
+          <div class="node-label">Simple Storage</div>
+          <div class="node-sub">Service (S3)</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Return arrow -->
+    <div class="return-row">
+      <div class="endpoint-card" style="animation-delay:1s;">
+        <div class="icon">🔉</div>
+        <div class="label">Audio File</div>
+        <div class="sub">Output</div>
+      </div>
+      <div class="return-track">
+        <span class="return-label">Download Audio File</span>
+        <div class="dot dot-rev gray d1"></div>
+        <div class="dot dot-rev gray d2" style="animation-delay:0.93s"></div>
+        <div class="dot dot-rev gray d3" style="animation-delay:1.86s"></div>
+      </div>
+      <!-- Spacer to align with cloud box right edge -->
+      <div style="min-width:84px;max-width:92px;flex-shrink:0;"></div>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-num">1</div>
+        <div class="legend-text">Choose the suitable book, article, newsletter etc. content to be translated from text-to-speech.</div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-num">2</div>
+        <div class="legend-text">A Lambda function retrieves the text and sends it to Amazon Polly for synthesis.</div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-num">3</div>
+        <div class="legend-text">Choose the required language and a voice model. Amazon Polly converts the text-to-speech and stores the audio file in S3 bucket.</div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-num">4</div>
+        <div class="legend-text">The S3 bucket consists of the final text-to-speech audio which can be downloaded.</div>
+      </div>
+    </div>
+
+    <div class="footer">AWS Serverless Text-to-Speech Architecture &nbsp;·&nbsp; Built with HTML &amp; CSS</div>
+
+  </div>
+</body>
+</html>
